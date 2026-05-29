@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Reports — StudentBase{% endblock %}
+{% block page_title %}Attendance Reports{% endblock %}
+{% block notif_list %}{% endblock %}
+
+{% block content %}
+<!-- Daily summary chart -->
+<div class="card mb-18">
+ <div class="card-title">Daily Summary — Last 14 Days</div>
+ <canvas id="daily-chart" height="70"></canvas>
+</div>
+
+<!-- Per-student breakdown -->
+<div class="card" style="padding:0;overflow:hidden">
+ <div style="padding:18px 22px;border-bottom:1px solid var(--border)">
+ <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:.85rem">STUDENT ATTENDANCE BREAKDOWN</span>
+ </div>
+ <div class="table-wrap">
+ <table>
+ <thead>
+ <tr>
+ <th>Student</th>
+ <th>Course</th>
+ <th>Present</th>
+ <th>Late</th>
+ <th>Absent</th>
+ <th>Rate</th>
+ <th>Consec. Absent</th>
+ <th>Risk</th>
+ <th>Recent 14 Days</th>
+ </tr>
+ </thead>
+ <tbody>
+ {% for s in students %}
+ <tr>
+ <td>
+ <strong>{{ s.first_name }} {{ s.last_name }}</strong><br>
+ <span style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--text3)">{{ s.student_number }}</span>
+ </td>
+ <td style="color:var(--text2);font-size:.82rem">{{ s.course }}</td>
+ <td style="color:var(--green);font-family:'DM Mono',monospace">{{ s.stats.present }}</td>
+ <td style="color:var(--yellow);font-family:'DM Mono',monospace">{{ s.stats.late }}</td>
+ <td style="color:var(--red);font-family:'DM Mono',monospace">{{ s.stats.absent }}</td>
+ <td>
+ <div style="font-weight:600;color:{{ 'var(--green)' if s.stats.pct >= 75 else 'var(--red)' }}">
+ {{ s.stats.pct }}%
+ </div>
+ <div class="pct-bar">
+ <div class="pct-fill {{ 'good' if s.stats.pct >= 75 else ('warn' if s.stats.pct >= 60 else 'danger') }}"
+ style="width:{{ s.stats.pct }}%"></div>
+ </div>
+ </td>
+ <td style="font-family:'DM Mono',monospace;font-size:.8rem;
+ color:{{ 'var(--red)' if s.stats.consecutive_absences >= 3 else 'var(--text2)' }}">
+ {{ s.stats.consecutive_absences }} days
+ </td>
+ <td>
+ {% if s.stats.at_risk %}
+ <span class="badge badge-risk">Risk</span>
+ {% else %}
+ <span class="badge badge-present">OK</span>
+ {% endif %}
+ </td>
+ <td>
+ <div style="display:flex;gap:2px">
+ {% for h in s.history %}
+ <div title="{{ h.date }} — {{ h.status }}"
+ style="width:10px;height:22px;border-radius:2px;background:
+ {{ 'var(--green)' if h.status=='Present' else ('var(--yellow)' if h.status=='Late' else 'var(--red)') }};
+ opacity:.85">
+ </div>
+ {% endfor %}
+ </div>
+ </td>
+ </tr>
+ {% endfor %}
+ </tbody>
+ </table>
+ </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+const labels = {{ daily|map(attribute='date')|list|tojson }};
+const present = {{ daily|map(attribute='present')|list|tojson }};
+const absent = {{ daily|map(attribute='absent')|list|tojson }};
+const late = {{ daily|map(attribute='late')|list|tojson }};
+
+new Chart(document.getElementById('daily-chart').getContext('2d'), {
+ type: 'line',
+ data: {
+ labels,
+ datasets: [
+ { label:'Present', data:present, borderColor:'#27a356', backgroundColor:'rgba(39,163,86,.1)', tension:.35, fill:true, pointRadius:4 },
+ { label:'Late', data:late, borderColor:'#c47b10', backgroundColor:'rgba(196,123,16,.08)', tension:.35, fill:true, pointRadius:4 },
+ { label:'Absent', data:absent, borderColor:'#c0352a', backgroundColor:'rgba(192,53,42,.08)', tension:.35, fill:true, pointRadius:4 },
+ ]
+ },
+ options: {
+ responsive: true,
+ plugins: { legend: { labels: { color:'#7e9bbf', font:{family:'IBM Plex Mono',size:10} } } },
+ scales: {
+ x: { ticks:{color:'#3d5270',font:{family:'IBM Plex Mono',size:10}}, grid:{color:'#1e3058'} },
+ y: { ticks:{color:'#3d5270',font:{family:'IBM Plex Mono',size:10}}, grid:{color:'#1e3058'} }
+ }
+ }
+});
+{% endblock %}

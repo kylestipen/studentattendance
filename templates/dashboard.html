@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — StudentBase{% endblock %}
+{% block page_title %}Live Dashboard{% endblock %}
+
+{% block notif_list %}
+{% for n in notifications %}
+<div class="notif-item {{ 'unread' if not n.is_read else '' }} {{ n.type }}">
+ <div class="dot"></div>
+ <div class="notif-msg">{{ n.message }}</div>
+ <div class="notif-time">{{ n.created_at.strftime('%H:%M') if n.created_at else '' }}</div>
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block content %}
+<!-- Stat Grid -->
+<div class="stat-grid mb-24">
+ <div class="stat-card green">
+ <div class="stat-label">Present Today</div>
+ <div class="stat-value" id="cnt-present">{{ counts.Present }}</div>
+ <div class="stat-sub">of {{ total_students }} students</div>
+ </div>
+ <div class="stat-card red">
+ <div class="stat-label">Absent Today</div>
+ <div class="stat-value" id="cnt-absent">{{ counts.Absent }}</div>
+ <div class="stat-sub">not yet recorded: {{ counts.not_recorded }}</div>
+ </div>
+ <div class="stat-card yellow">
+ <div class="stat-label">Late Today</div>
+ <div class="stat-value" id="cnt-late">{{ counts.Late }}</div>
+ <div class="stat-sub">after 8:30 AM</div>
+ </div>
+ <div class="stat-card blue">
+ <div class="stat-label">At-Risk Students</div>
+ <div class="stat-value">{{ at_risk|length }}</div>
+ <div class="stat-sub">need attention</div>
+ </div>
+</div>
+
+<div class="grid-2 mb-18">
+ <!-- At-Risk Panel -->
+ <div class="card">
+ <div class="card-title">At-Risk Students</div>
+ {% if at_risk %}
+ <div class="table-wrap">
+ <table>
+ <thead>
+ <tr><th>Student</th><th>Consec. Absent</th><th>Attendance %</th><th>Action</th></tr>
+ </thead>
+ <tbody>
+ {% for s in at_risk %}
+ <tr>
+ <td>
+ <strong>{{ s.first_name }} {{ s.last_name }}</strong><br>
+ <span style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--text3)">{{ s.student_number }}</span>
+ </td>
+ <td>
+ <span class="badge {% if s.stats.consecutive_absences >= 3 %}badge-absent{% else %}badge-late{% endif %}">
+ {{ s.stats.consecutive_absences }} days
+ </span>
+ </td>
+ <td>
+ <div style="font-weight:500;color:{{ 'var(--red)' if s.stats.pct < 75 else 'var(--yellow)' }}">{{ s.stats.pct }}%</div>
+ <div class="pct-bar"><div class="pct-fill {{ 'danger' if s.stats.pct < 75 else 'warn' }}" style="width:{{ s.stats.pct }}%"></div></div>
+ </td>
+ <td><a href="/reports" class="btn btn-ghost btn-sm">View</a></td>
+ </tr>
+ {% endfor %}
+ </tbody>
+ </table>
+ </div>
+ {% else %}
+ <div style="text-align:center;padding:32px 0;color:var(--text3)">
+ <div style="font-size:2rem;margin-bottom:8px"></div>
+ <div>No at-risk students today</div>
+ </div>
+ {% endif %}
+ </div>
+
+ <!-- Recent Activity -->
+ <div class="card">
+ <div class="card-title">Recent Activity</div>
+ {% if recent %}
+ <div id="activity-feed">
+ {% for r in recent %}
+ <div class="activity-item">
+ <div class="activity-dot {{ r.status|lower }}"></div>
+ <div class="activity-text">
+ <strong>{{ r.first_name }} {{ r.last_name }}</strong>
+ marked <span class="badge badge-{{ r.status|lower }}">{{ r.status }}</span>
+ </div>
+ <div class="activity-time">{{ r.scanned_at.strftime('%H:%M') if r.scanned_at else '—' }}</div>
+ </div>
+ {% endfor %}
+ </div>
+ {% else %}
+ <div style="text-align:center;padding:32px 0;color:var(--text3)">No scans recorded today yet</div>
+ {% endif %}
+ </div>
+</div>
+
+<!-- Chart -->
+<div class="card">
+ <div class="card-title">Attendance Trend — Last 7 Days</div>
+ <canvas id="trend-chart" height="80"></canvas>
+</div>
+{% endblock %}
+
+{% block scripts %}
+// Chart 
+const ctx = document.getElementById('trend-chart').getContext('2d');
+new Chart(ctx, {
+ type: 'bar',
+ data: {
+ labels: {{ chart_labels|tojson }},
+ datasets: [
+ { label:'Present', data:{{ chart_present|tojson }}, backgroundColor:'rgba(39,163,86,.7)', borderRadius:4 },
+ { label:'Late', data:{{ chart_late|tojson }}, backgroundColor:'rgba(196,123,16,.7)', borderRadius:4 },
+ { label:'Absent', data:{{ chart_absent|tojson }}, backgroundColor:'rgba(192,53,42,.5)', borderRadius:4 },
+ ]
+ },
+ options: {
+ responsive: true,
+ plugins: { legend: { labels: { color:'#7e9bbf', font:{family:'IBM Plex Mono',size:10} } } },
+ scales: {
+ x: { stacked:true, ticks:{color:'#3d5270',font:{family:'IBM Plex Mono',size:10}}, grid:{color:'#1e3058'} },
+ y: { stacked:true, ticks:{color:'#3d5270',font:{family:'IBM Plex Mono',size:10}}, grid:{color:'#1e3058'} }
+ }
+ }
+});
+
+// Live stat updates 
+socket.on('attendance_update', (data) => {
+ // prepend to activity feed
+ const feed = document.getElementById('activity-feed');
+ if (feed) {
+ const div = document.createElement('div');
+ div.className = 'activity-item';
+ div.innerHTML = `
+ <div class="activity-dot ${data.status.toLowerCase()}"></div>
+ <div class="activity-text"><strong>${data.student_name}</strong> marked <span class="badge badge-${data.status.toLowerCase()}">${data.status}</span></div>
+ <div class="activity-time">${data.time}</div>`;
+ feed.prepend(div);
+ if (feed.children.length > 10) feed.lastChild.remove();
+ }
+
+ // refresh stats
+ fetch('/api/dashboard-stats').then(r=>r.json()).then(d => {
+ document.getElementById('cnt-present').textContent = d.counts.Present || 0;
+ document.getElementById('cnt-absent').textContent = d.counts.Absent || 0;
+ document.getElementById('cnt-late').textContent = d.counts.Late || 0;
+ const badge = document.getElementById('notif-count');
+ if (badge && d.unread > 0) { badge.style.display='flex'; badge.textContent=d.unread; }
+ });
+});
+
+// update notif badge on load
+{% if unread > 0 %}
+document.getElementById('notif-count').style.display = 'flex';
+document.getElementById('notif-count').textContent = {{ unread }};
+{% endif %}
+{% endblock %}

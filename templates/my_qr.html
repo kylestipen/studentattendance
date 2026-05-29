@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}My QR Code — StudentBase{% endblock %}
+{% block page_title %}My QR Code{% endblock %}
+
+{% block content %}
+<div style="max-width:480px;margin:0 auto;text-align:center">
+ <div class="card mb-18">
+ <div style="margin-bottom:20px">
+ <div style="font-family:'Syne',sans-serif;font-size:1.3rem;font-weight:800;margin-bottom:4px">
+ {{ student.first_name }} {{ student.last_name }}
+ </div>
+ <div style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--text3)">{{ student.student_number }}</div>
+ <div style="font-size:.82rem;color:var(--text2);margin-top:4px">{{ student.course }} · Year {{ student.year_level }} · Section {{ student.section }}</div>
+ </div>
+
+ <!-- QR Code -->
+ <div style="display:flex;justify-content:center;margin:24px 0">
+ <div class="qr-box">
+ <div id="qr-code"></div>
+ </div>
+ </div>
+
+ <div style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--text3);word-break:break-all;margin-top:8px">
+ TOKEN: {{ student.qr_token }}
+ </div>
+
+ <p style="margin-top:16px;font-size:.82rem;color:var(--text2);line-height:1.6">
+ Show this QR code to the admin scanner to mark your attendance.
+ Keep this page open on your phone.
+ </p>
+ </div>
+
+ <div style="display:flex;gap:10px">
+ <a href="/my-profile" class="btn btn-ghost flex-1">View My Profile</a>
+ <button class="btn btn-primary flex-1" onclick="window.print()">Print QR</button>
+ </div>
+</div>
+
+<style>
+@media print {
+ .sidebar, .topbar, .btn { display:none !important; }
+ .main { margin-left:0 !important; }
+ .qr-box { box-shadow:none !important; }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+// Generate QR code
+new QRCode(document.getElementById('qr-code'), {
+ text: '{{ student.qr_token }}',
+ width: 220,
+ height: 220,
+ colorDark: '#000000',
+ colorLight: '#ffffff',
+ correctLevel: QRCode.CorrectLevel.H
+});
+{% endblock %}

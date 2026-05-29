@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block auth_content %}
+<style>
+body {
+  min-height: 100vh;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: var(--bg) !important;
+}
+
+.login-wrap {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle dot grid background */
+.login-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(74,144,217,.12) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+}
+
+/* Soft glow blob */
+.login-wrap::after {
+  content: '';
+  position: absolute;
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(168,206,240,.2) 0%, transparent 60%);
+  top: -100px; right: -150px;
+  pointer-events: none;
+}
+
+.login-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px 36px;
+  width: 380px;
+  max-width: 92vw;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 4px 24px rgba(60,100,160,.1), 0 1px 4px rgba(60,100,160,.06);
+}
+
+/* Top accent line */
+.login-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 28px; right: 28px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--blue), var(--sage-light), transparent);
+  border-radius: 0 0 3px 3px;
+}
+
+.login-header {
+  margin-bottom: 28px;
+}
+
+.login-eyebrow {
+  font-family: var(--mono);
+  font-size: 0.54rem;
+  color: var(--text3);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.login-brand {
+  font-family: var(--cond);
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+.login-brand span { color: var(--blue); }
+
+.login-subtitle {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  color: var(--text3);
+  margin-top: 6px;
+  letter-spacing: .8px;
+}
+
+/* Tab switcher */
+.login-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 22px;
+  gap: 0;
+}
+.login-tab {
+  flex: 1;
+  padding: 9px 0;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 0.63rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--text3);
+  border: none;
+  background: transparent;
+  transition: all .14s;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+.login-tab:hover { color: var(--text2); }
+.login-tab.active {
+  color: var(--blue);
+  border-bottom-color: var(--blue);
+}
+
+.login-form { display: flex; flex-direction: column; gap: 15px; }
+
+.login-btn {
+  width: 100%;
+  padding: 11px;
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--cond);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all .16s;
+  margin-top: 4px;
+  box-shadow: 0 2px 8px rgba(74,144,217,.3);
+}
+.login-btn:hover {
+  background: var(--blue-mid);
+  box-shadow: 0 4px 14px rgba(74,144,217,.4);
+  transform: translateY(-1px);
+}
+.login-btn:active { transform: translateY(0); }
+
+.hint-box {
+  background: var(--blue-ghost);
+  border: 1px solid var(--blue-pale);
+  border-radius: var(--radius);
+  padding: 10px 13px;
+  margin-top: 14px;
+  font-size: 0.7rem;
+  color: var(--text2);
+  line-height: 1.6;
+  font-family: var(--mono);
+}
+.hint-box strong { color: var(--blue); }
+
+@media (max-width: 480px) {
+  .login-card { padding: 28px 20px; }
+  .login-brand { font-size: 1.4rem; }
+}
+</style>
+
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="login-eyebrow">LSPU &mdash; Los Baños</div>
+      <div class="login-brand">Student<span>Base</span></div>
+      <div class="login-subtitle">Live Attendance &amp; Monitoring System</div>
+    </div>
+
+    <div class="login-tabs">
+      <button class="login-tab active" onclick="setTab('admin', this)">Admin</button>
+      <button class="login-tab" onclick="setTab('student', this)">Student</button>
+    </div>
+
+    {% with msgs = get_flashed_messages(with_categories=True) %}
+      {% for cat, msg in msgs %}
+        <div class="flash flash-{{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+
+    <form method="POST" class="login-form">
+      <div class="form-group" style="margin-bottom:0">
+        <label>Username</label>
+        <input type="text" name="username" id="username-input" placeholder="Enter username" required autocomplete="username">
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Password</label>
+        <input type="password" name="password" placeholder="Enter password" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="login-btn">Sign In</button>
+    </form>
+
+    <div class="hint-box" id="hint-admin">
+      Admin — username <strong>admin</strong> / password <strong>admin123</strong>
+    </div>
+    <div class="hint-box" id="hint-student" style="display:none">
+      Student — use your <strong>student number</strong> as both username and password
+    </div>
+  </div>
+</div>
+
+<script>
+function setTab(type, el) {
+  document.querySelectorAll('.login-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('hint-admin').style.display   = type === 'admin'   ? '' : 'none';
+  document.getElementById('hint-student').style.display = type === 'student' ? '' : 'none';
+  document.getElementById('username-input').placeholder = type === 'admin' ? 'admin' : '2024-0001';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Students — StudentBase{% endblock %}
+{% block page_title %}Manage Students{% endblock %}
+{% block notif_list %}{% endblock %}
+
+{% block content %}
+<div class="flex gap-10 mb-18 items-center">
+ <div style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--text3)">
+ Total: <strong style="color:var(--text)">{{ students|length }}</strong> students enrolled
+ </div>
+ <button class="btn btn-primary" style="margin-left:auto" onclick="document.getElementById('add-modal').classList.add('open')">
+ Add Student
+ </button>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden">
+ <div class="table-wrap">
+ <table>
+ <thead>
+ <tr>
+ <th>Student No.</th>
+ <th>Name</th>
+ <th>Course</th>
+ <th>Section</th>
+ <th>Attendance</th>
+ <th>Status</th>
+ <th>Actions</th>
+ </tr>
+ </thead>
+ <tbody>
+ {% for s in students %}
+ <tr>
+ <td style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--text2)">{{ s.student_number }}</td>
+ <td>
+ <strong>{{ s.first_name }} {{ s.last_name }}</strong><br>
+ <span style="font-size:.72rem;color:var(--text3)">{{ s.email }}</span>
+ </td>
+ <td style="color:var(--text2)">{{ s.course }}</td>
+ <td style="font-family:'DM Mono',monospace;font-size:.75rem">Yr {{ s.year_level }} – {{ s.section }}</td>
+ <td style="min-width:120px">
+ <div style="font-size:.82rem;font-weight:500;color:{{ 'var(--green)' if s.stats.pct >= 75 else 'var(--red)' }}">
+ {{ s.stats.pct }}%
+ </div>
+ <div class="pct-bar">
+ <div class="pct-fill {{ 'good' if s.stats.pct >= 75 else 'danger' }}" style="width:{{ s.stats.pct }}%"></div>
+ </div>
+ <div style="font-family:'DM Mono',monospace;font-size:.62rem;color:var(--text3);margin-top:3px">
+ P:{{ s.stats.present }} L:{{ s.stats.late }} A:{{ s.stats.absent }}
+ </div>
+ </td>
+ <td>
+ {% if s.stats.at_risk %}
+ <span class="badge badge-risk">At Risk</span>
+ {% else %}
+ <span class="badge badge-present">Good</span>
+ {% endif %}
+ </td>
+ <td>
+ <div style="display:flex;gap:6px">
+ <form method="POST" action="/students/delete/{{ s.id }}"
+ onsubmit="return confirm('Remove {{ s.first_name }}?')">
+ <button type="submit" class="btn btn-danger btn-sm">&times;</button>
+ </form>
+ </div>
+ </td>
+ </tr>
+ {% endfor %}
+ </tbody>
+ </table>
+ </div>
+</div>
+
+<!-- Add Student Modal -->
+<div class="modal-overlay" id="add-modal">
+ <div class="modal">
+ <div class="modal-title">
+ <span>+ Add New Student</span>
+ <span class="modal-close" onclick="document.getElementById('add-modal').classList.remove('open')">&times;</span>
+ </div>
+ <form method="POST" action="/students/add">
+ <div class="grid-2">
+ <div class="form-group">
+ <label>First Name *</label>
+ <input name="first_name" required placeholder="Juan">
+ </div>
+ <div class="form-group">
+ <label>Last Name *</label>
+ <input name="last_name" required placeholder="dela Cruz">
+ </div>
+ </div>
+ <div class="form-group">
+ <label>Student Number *</label>
+ <input name="student_number" required placeholder="2024-0006">
+ </div>
+ <div class="form-group">
+ <label>Email *</label>
+ <input name="email" type="email" required placeholder="student@school.edu">
+ </div>
+ <div class="grid-3">
+ <div class="form-group">
+ <label>Course</label>
+ <select name="course">
+ <option>BSIT</option>
+ <option>BSCS</option>
+ <option>BSECE</option>
+ <option>BSCPE</option>
+ </select>
+ </div>
+ <div class="form-group">
+ <label>Year Level</label>
+ <select name="year_level">
+ <option>1</option><option>2</option><option>3</option><option>4</option>
+ </select>
+ </div>
+ <div class="form-group">
+ <label>Section</label>
+ <input name="section" placeholder="A" maxlength="5">
+ </div>
+ </div>
+ <div style="display:flex;gap:10px;margin-top:8px">
+ <button type="button" class="btn btn-ghost flex-1"
+ onclick="document.getElementById('add-modal').classList.remove('open')">Cancel</button>
+ <button type="submit" class="btn btn-primary flex-1">Add Student</button>
+ </div>
+ </form>
+ </div>
+</div>
+{% endblock %}

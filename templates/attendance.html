@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+{% block title %}Attendance — StudentBase{% endblock %}
+{% block page_title %}Live Attendance Board{% endblock %}
+
+{% block notif_list %}{% endblock %}
+
+{% block content %}
+<div class="flex gap-10 mb-18 items-center">
+ <div class="flex-1">
+ <div style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--text3)">
+ DATE: <strong style="color:var(--text)">{{ today }}</strong>
+ &nbsp;·&nbsp; Updates live via WebSocket
+ </div>
+ </div>
+ <button class="btn btn-primary" onclick="openScanner()">Open Scanner</button>
+ <a href="/reports" class="btn btn-ghost">Reports</a>
+</div>
+
+<!-- Live board -->
+<div class="card" style="padding:0;overflow:hidden">
+ <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px">
+ <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:.85rem">LIVE ATTENDANCE BOARD</span>
+ <div class="live-dot">Watching</div>
+ <div style="margin-left:auto;display:flex;gap:10px">
+ <span class="badge badge-present">Present</span>
+ <span class="badge badge-late">Late</span>
+ <span class="badge badge-absent">Absent</span>
+ </div>
+ </div>
+ <div class="table-wrap">
+ <table id="board-table">
+ <thead>
+ <tr>
+ <th>#</th>
+ <th>Student</th>
+ <th>Course / Section</th>
+ <th>Status</th>
+ <th>Scanned At</th>
+ <th>Override</th>
+ </tr>
+ </thead>
+ <tbody id="board-body">
+ {% for s in board %}
+ <tr id="row-{{ s.id }}" class="board-row-{{ (s.today.status if s.today else 'absent')|lower }}">
+ <td style="font-family:'DM Mono',monospace;font-size:.7rem;color:var(--text3)">{{ loop.index }}</td>
+ <td>
+ <strong>{{ s.first_name }} {{ s.last_name }}</strong><br>
+ <span style="font-family:'DM Mono',monospace;font-size:.65rem;color:var(--text3)">{{ s.student_number }}</span>
+ </td>
+ <td style="color:var(--text2);font-size:.82rem">{{ s.course }} — {{ s.section }}</td>
+ <td id="status-{{ s.id }}">
+ {% if s.today %}
+ <span class="badge badge-{{ s.today.status|lower }}">{{ s.today.status }}</span>
+ {% else %}
+ <span class="badge" style="background:var(--surface2);color:var(--text3);border:1px solid var(--border)">Not recorded</span>
+ {% endif %}
+ </td>
+ <td id="time-{{ s.id }}" style="font-family:'DM Mono',monospace;font-size:.75rem;color:var(--text3)">
+ {{ s.today.scanned_at.strftime('%H:%M:%S') if s.today and s.today.scanned_at else '—' }}
+ </td>
+ <td>
+ <select id="sel-{{ s.id }}" style="width:110px;padding:5px 8px;font-size:.75rem" onchange="overrideStatus({{ s.id }}, this.value)">
+ <option value="">— set —</option>
+ <option value="Present">Present</option>
+ <option value="Late">Late</option>
+ <option value="Absent">Absent</option>
+ </select>
+ </td>
+ </tr>
+ {% endfor %}
+ </tbody>
+ </table>
+ </div>
+</div>
+
+<!-- QR Scanner Modal -->
+<div class="modal-overlay" id="scanner-modal">
+ <div class="modal" style="max-width:520px">
+ <div class="modal-title">
+ <span>QR Code Scanner</span>
+ <span class="modal-close" onclick="closeScanner()">&times;</span>
+ </div>
+ <p style="color:var(--text2);font-size:.82rem;margin-bottom:16px">
+ Point the camera at a student's QR code to mark attendance.
+ </p>
+ <div id="scanner-container">
+ <video id="scanner-video" autoplay muted playsinline></video>
+ <div class="scan-reticle"></div>
+ </div>
+ <canvas id="scanner-canvas" style="display:none"></canvas>
+ <div id="scan-result" style="margin-top:14px;min-height:48px;display:flex;align-items:center;justify-content:center"></div>
+ <div style="display:flex;gap:10px;margin-top:16px">
+ <button class="btn btn-ghost flex-1" onclick="closeScanner()">Cancel</button>
+ <button class="btn btn-primary flex-1" onclick="manualScan()">Manual Entry</button>
+ </div>
+ </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+// Live board update 
+socket.on('attendance_update', (data) => {
+ const sid = data.student_id;
+ const statusCell = document.getElementById(`status-${sid}`);
+ const timeCell = document.getElementById(`time-${sid}`);
+ const row = document.getElementById(`row-${sid}`);
+
+ if (!statusCell) return;
+
+ // flash animation
+ row.style.transition = 'background .3s';
+ row.style.background = data.status === 'Present' ? 'rgba(34,197,94,.15)' :
+ data.status === 'Late' ? 'rgba(245,158,11,.15)' :
+ 'rgba(239,68,68,.1)';
+ setTimeout(() => {
+ row.style.background = '';
+ row.className = `board-row-${data.status.toLowerCase()}`;
+ }, 1200);
+
+ statusCell.innerHTML = `<span class="badge badge-${data.status.toLowerCase()}">${data.status}</span>`;
+ timeCell.textContent = data.time;
+});
+
+// QR Scanner 
+let stream = null;
+let scanInterval = null;
+
+async function openScanner() {
+ document.getElementById('scanner-modal').classList.add('open');
+ try {
+ stream = await navigator.mediaDevices.getUserMedia({
+ video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } }
+ });
+ const video = document.getElementById('scanner-video');
+ video.srcObject = stream;
+ video.play();
+ startDecoding();
+ } catch (err) {
+ document.getElementById('scan-result').innerHTML =
+ `<div style="color:var(--red)">Camera error: ${err.message}. Use Manual Entry below.</div>`;
+ }
+}
+
+function closeScanner() {
+ document.getElementById('scanner-modal').classList.remove('open');
+ if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+ clearInterval(scanInterval);
+ document.getElementById('scan-result').innerHTML = '';
+}
+
+function startDecoding() {
+ const video = document.getElementById('scanner-video');
+ const canvas = document.getElementById('scanner-canvas');
+ const ctx = canvas.getContext('2d');
+ let lastToken = '';
+
+ scanInterval = setInterval(() => {
+ if (video.readyState !== video.HAVE_ENOUGH_DATA) return;
+ canvas.width = video.videoWidth;
+ canvas.height = video.videoHeight;
+ ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+ const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+ // Use jsQR if available (loaded via CDN)
+ if (window.jsQR) {
+ const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' });
+ if (code && code.data !== lastToken) {
+ lastToken = code.data;
+ submitScan(code.data);
+ }
+ }
+ }, 400);
+}
+
+function submitScan(token) {
+ const result = document.getElementById('scan-result');
+ result.innerHTML = `<div style="color:var(--accent2)">Processing...</div>`;
+
+ fetch('/api/scan', {
+ method: 'POST',
+ headers: {'Content-Type':'application/json'},
+ body: JSON.stringify({token})
+ }).then(r => r.json()).then(data => {
+ if (data.ok) {
+ const color = data.status === 'Present' ? 'var(--green)' : 'var(--yellow)';
+ result.innerHTML = `<div style="color:${color};font-weight:600;font-size:1.1rem">
+ ${data.student_name} — ${data.status} at ${data.time}</div>`;
+ } else {
+ result.innerHTML = `<div style="color:var(--red)"> ${data.error}</div>`;
+ }
+ }).catch(() => {
+ result.innerHTML = `<div style="color:var(--red)">Network error</div>`;
+ });
+}
+
+function manualScan() {
+ const token = prompt('Enter QR token (student QR code value):');
+ if (token) submitScan(token.trim());
+}
+
+function overrideStatus(studentId, status) {
+ if (!status) return;
+ fetch('/attendance/override', {
+ method: 'POST',
+ headers: {'Content-Type':'application/json'},
+ body: JSON.stringify({student_id: studentId, status})
+ }).then(r => r.json()).then(d => {
+ if (d.ok) showToast(`Status updated to ${d.status}`, 'success');
+ document.getElementById(`sel-${studentId}`).value = '';
+ });
+}
+{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+{% endblock %}
