@@ -18,13 +18,23 @@ app.secret_key = os.environ.get('SECRET_KEY', 'studentbase-secret-2024')
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # ─── DB Config ───────────────────────────────────────────────
+import urllib.parse
+
+db_url = os.environ.get('DATABASE_URL', 'mysql://root:@localhost/studentbase')
+parsed_url = urllib.parse.urlparse(db_url)
+
 DB_CONFIG = {
-    'host':     os.environ.get('DB_HOST',   'localhost'),
-    'user':     os.environ.get('DB_USER',   'root'),
-    'password': os.environ.get('DB_PASS',   ''),
-    'database': os.environ.get('DB_NAME',   'studentbase'),
+    'host':     parsed_url.hostname or 'localhost',
+    'port':     parsed_url.port or 3306,
+    'user':     parsed_url.username or 'root',
+    'password': parsed_url.password or '',
+    'database': parsed_url.path.lstrip('/') or 'studentbase',
     'charset':  'utf8mb4',
 }
+
+# Pag-handle sa SSL parameter para sa Aiven Cloud
+if 'sslmode=require' in db_url:
+    DB_CONFIG['ssl'] = {'ssl_mode': 'REQUIRED'}
 
 def get_db():
     try:
