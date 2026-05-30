@@ -11,7 +11,6 @@ from datetime import date, datetime, timedelta
 from functools import wraps
 import secrets
 import os
-import urllib.parse
 
 # ─── App Setup ───────────────────────────────────────────────
 app = Flask(__name__)
@@ -19,25 +18,17 @@ app.secret_key = os.environ.get('SECRET_KEY', 'studentbase-secret-2024')
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # ─── DB Config ───────────────────────────────────────────────
-db_url = os.environ.get('DATABASE_URL', 'mysql://root:@localhost/studentbase')
-parsed_url = urllib.parse.urlparse(db_url)
-
 DB_CONFIG = {
-    'host':     parsed_url.hostname or 'localhost',
-    'user':     parsed_url.username or 'root',
-    'password': parsed_url.password or '',
-    'database': parsed_url.path.lstrip('/') or 'studentbase',
+    'host':     os.environ.get('DB_HOST',   'localhost'),
+    'port':     int(os.environ.get('DB_PORT', 3306)),
+    'user':     os.environ.get('DB_USER',   'root'),
+    'password': os.environ.get('DB_PASS',   ''),
+    'database': os.environ.get('DB_NAME',   'studentbase'),
     'charset':  'utf8mb4',
 }
 
-# Strictly enforce integer data type for custom cloud port parsing
-if parsed_url.port:
-    DB_CONFIG['port'] = int(parsed_url.port)
-else:
-    DB_CONFIG['port'] = 3306
-
-# Secure SSL Handshake definition required by Aiven Cloud infrastructure
-if 'sslmode=require' in db_url or 'sslmode=REQUIRED' in db_url:
+# Awtomatikong i-enforce ang SSL Handshake kapag hindi localhost ang gamit (Aiven Cloud Production)
+if DB_CONFIG['host'] != 'localhost':
     DB_CONFIG['ssl_disabled'] = False
 
 def get_db():
