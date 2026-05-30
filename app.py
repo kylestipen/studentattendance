@@ -15,7 +15,7 @@ import os
 # ─── App Setup ───────────────────────────────────────────────
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'studentbase-secret-2024')
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='gevent')
 
 # ─── DB Config ───────────────────────────────────────────────
 DB_CONFIG = {
