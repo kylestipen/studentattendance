@@ -15,7 +15,7 @@ import os
 # ─── App Setup ───────────────────────────────────────────────
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'studentbase-secret-2024')
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
 # ─── DB Config ───────────────────────────────────────────────
 DB_CONFIG = {
@@ -26,10 +26,6 @@ DB_CONFIG = {
     'database': os.environ.get('DB_NAME',   'studentbase'),
     'charset':  'utf8mb4',
 }
-
-# Awtomatikong i-enforce ang SSL Handshake kapag hindi localhost ang gamit (Aiven Cloud Production)
-if DB_CONFIG['host'] != 'localhost':
-    DB_CONFIG['ssl_disabled'] = False
 
 def get_db():
     try:
@@ -85,7 +81,6 @@ def get_student_stats(student_id):
     absent  = sum(1 for r in rows if r['status'] == 'Absent')
     pct     = round((present + late) / total * 100) if total else 0
 
-    # consecutive absences (most recent first)
     consec = 0
     for r in rows:
         if r['status'] == 'Absent':
@@ -104,7 +99,6 @@ def add_notification(message, ntype='info', student_id=None):
         "INSERT INTO notifications (message, type, student_id) VALUES (%s,%s,%s)",
         (message, ntype, student_id), commit=True
     )
-    # broadcast to all admins
     notif = {
         'id': nid, 'message': message, 'type': ntype,
         'student_id': student_id,
@@ -160,7 +154,6 @@ def logout():
 def dashboard():
     today = date.today().isoformat()
 
-    # today's counts
     today_rows = query(
         "SELECT status, COUNT(*) as cnt FROM attendance WHERE date=%s GROUP BY status",
         (today,)
@@ -172,7 +165,6 @@ def dashboard():
     total_students = (query("SELECT COUNT(*) as n FROM students", fetchone=True) or {}).get('n', 0)
     counts['not_recorded'] = total_students - sum(counts.values())
 
-    # at-risk students
     all_students = query("SELECT * FROM students") or []
     at_risk = []
     for s in all_students:
@@ -181,7 +173,6 @@ def dashboard():
             s['stats'] = stats
             at_risk.append(s)
 
-    # recent activity (today)
     recent = query(
         """SELECT a.*, s.first_name, s.last_name, s.student_number
            FROM attendance a JOIN students s ON a.student_id=s.id
@@ -190,7 +181,6 @@ def dashboard():
         (today,)
     ) or []
 
-    # chart: last 7 days
     chart_labels, chart_present, chart_absent, chart_late = [], [], [], []
     for i in range(6, -1, -1):
         d = (date.today() - timedelta(days=i)).isoformat()
@@ -202,7 +192,7 @@ def dashboard():
                FROM attendance WHERE date=%s""",
             (d,), fetchone=True
         ) or {}
-        chart_labels.append(d[5:])  # MM-DD
+        chart_labels.append(d[5:])
         chart_present.append(int(row.get('p') or 0))
         chart_absent.append(int(row.get('a') or 0))
         chart_late.append(int(row.get('l') or 0))
@@ -247,7 +237,6 @@ def add_student():
          data['email'], data['course'], data['year_level'], data['section'], token),
         commit=True
     )
-    # create login
     query(
         "INSERT INTO sqlusers (username,password,role,student_id) VALUES (%s,%s,'student',%s)",
         (data['student_number'], data['student_number'], sid), commit=True
@@ -331,7 +320,6 @@ def reports():
         ) or []
         enriched.append(s)
 
-    # summary by date (last 14 days)
     daily = []
     for i in range(13, -1, -1):
         d = (date.today() - timedelta(days=i)).isoformat()
@@ -394,7 +382,6 @@ def api_scan():
                         'student_name': f"{student['first_name']} {student['last_name']}",
                         'status': 'Present'})
 
-    # determine Late: after 08:30
     status = 'Late' if now.hour > 8 or (now.hour == 8 and now.minute >= 30) else 'Present'
 
     if existing:
